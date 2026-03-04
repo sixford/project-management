@@ -1,13 +1,12 @@
 "use client";
 
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { tokenStore } from "@/lib/auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 if (!API_BASE_URL) {
-  // Helps you fail fast in dev if env isn't being read
-  // (Remember: restart `npm run dev` after changing .env)
   console.warn("NEXT_PUBLIC_API_BASE_URL is not set");
 }
 
@@ -84,53 +83,67 @@ export interface Team {
   projectManagerUserId?: number;
 }
 
+export type AuthMeResponse = {
+  userSub: string | null;
+  user: { username?: string | null; email?: string | null } | null;
+  userDetails: User | null;
+};
+
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: API_BASE_URL,
+  prepareHeaders: (headers) => {
+    // ✅ IMPORTANT: for API calls use access token (server verifies this)
+    const token = tokenStore.getAccessToken();
+
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    return headers;
+  },
+});
+
+// If we get 401, clear tokens and (usually) bounce to /sign-in.
+// ✅ Option B: DON'T redirect if we are already on a public route,
+// otherwise you can create a /sign-in -> /sign-in loop.
+const baseQueryWithAuthGuard: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
+  args,
+  api,
+  extraOptions
+) => {
+  const result = await rawBaseQuery(args, api, extraOptions);
+
+  if (result.error?.status === 401) {
+    tokenStore.clear();
+
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+
+      // ✅ prevent endless loop on public pages
+      const isPublic =
+        path === "/sign-in" ||
+        path.startsWith("/auth/callback") ||
+        path === "/";
+
+      if (!isPublic) {
+        window.location.href = "/sign-in";
+      }
+    }
+  }
+
+  return result;
+};
+
 export const api = createApi({
   reducerPath: "api",
   tagTypes: ["Projects", "Tasks", "Users", "Teams"],
   refetchOnFocus: true,
   refetchOnReconnect: true,
-  baseQuery: fetchBaseQuery({
-    baseUrl: API_BASE_URL,
-    prepareHeaders: (headers) => {
-      // IMPORTANT: for API calls use access token
-      const token = tokenStore.getAccessToken();
-
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
-      }
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryWithAuthGuard,
   endpoints: (build) => ({
-    getAuthUser: build.query<
-      { userSub: string | null; user: any | null; userDetails: User | null },
-      void
-    >({
-      // If you later create a real backend route, switch to:
-      // query: () => "auth/me",
-      queryFn: async () => {
-        const idToken = tokenStore.getIdToken();
-        if (!idToken) {
-          return { error: { status: 401, data: "No id_token found" } as any };
-        }
-
-        try {
-          const parts = idToken.split(".");
-          const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-          const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
-          const payload = JSON.parse(atob(padded));
-
-          const userSub = payload.sub ?? null;
-          const email = payload.email ?? null;
-          const username = payload["cognito:username"] ?? payload.username ?? null;
-
-          return {
-            data: { userSub, user: { username, email }, userDetails: null },
-          };
-        } catch {
-          return { error: { status: 400, data: "Could not decode id_token" } as any };
-        }
-      },
+    // ✅ REAL backend route
+    getAuthUser: build.query<AuthMeResponse, void>({
+      query: () => "auth/me",
     }),
 
     getProjects: build.query<Project[], void>({
@@ -198,5 +211,5 @@ export const {
   useSearchQuery,
   useGetUsersQuery,
   useGetTeamsQuery,
-  useGetAuthUserQuery, // ✅ THIS is the one you’re missing at runtime
+  useGetAuthUserQuery,
 } = api;

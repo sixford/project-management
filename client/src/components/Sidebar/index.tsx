@@ -24,26 +24,37 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { buildLogoutUrl, tokenStore } from "@/lib/auth";
 
 const Sidebar = () => {
   const [showProjects, setShowProjects] = useState(true);
   const [showPriority, setShowPriority] = useState(true);
 
-  const { data: projects } = useGetProjectsQuery();
   const dispatch = useAppDispatch();
   const isSidebarCollapsed = useAppSelector((state) => state.global.isSidebarCollapsed);
 
-  const { data: currentUser } = useGetAuthUserQuery();
-  const currentUserDetails = currentUser?.userDetails;
+  const { data: projects } = useGetProjectsQuery();
+
+  // ✅ Option B: always render sidebar; use /auth/me if available, otherwise fallback safely
+  const { data: currentUser, isLoading: isAuthLoading } = useGetAuthUserQuery();
+
+  const currentUserDetails = currentUser?.userDetails ?? null;
+
+  const displayUsername = useMemo(() => {
+    return (
+      currentUserDetails?.username ||
+      currentUser?.user?.username ||
+      "Account"
+    );
+  }, [currentUserDetails?.username, currentUser?.user?.username]);
+
+  const profilePictureUrl = currentUserDetails?.profilePictureUrl;
 
   const handleSignOut = () => {
     tokenStore.clear();
     window.location.href = buildLogoutUrl();
   };
-
-  if (!currentUserDetails) return null;
 
   const sidebarClassNames = `fixed flex flex-col h-[100%] justify-between shadow-xl
     transition-all duration-300 h-full z-40 dark:bg-black overflow-y-auto bg-white
@@ -80,12 +91,16 @@ const Sidebar = () => {
               <LockIcon className="mt-[0.1rem] h-3 w-3 text-gray-500 dark:text-gray-400" />
               <p className="text-xs text-gray-500">Private</p>
             </div>
+
+            {/* ✅ Option B: show auth loading hint but don't block rendering */}
+            {isAuthLoading ? (
+              <p className="mt-1 text-[11px] text-gray-400">Loading account…</p>
+            ) : null}
           </div>
         </div>
 
         {/* NAVBAR LINKS */}
         <nav className="z-10 w-full">
-          {/* Your “home” page is /home in this repo */}
           <SidebarLink icon={Home} label="Home" href="/home" />
           <SidebarLink icon={Briefcase} label="Timeline" href="/timeline" />
           <SidebarLink icon={Search} label="Search" href="/search" />
@@ -133,13 +148,14 @@ const Sidebar = () => {
         )}
       </div>
 
+      {/* MOBILE USER STRIP */}
       <div className="z-10 mt-32 flex w-full flex-col items-center gap-4 bg-white px-8 py-4 dark:bg-black md:hidden">
         <div className="flex w-full items-center">
           <div className="align-center flex h-9 w-9 justify-center">
-            {!!currentUserDetails?.profilePictureUrl ? (
+            {!!profilePictureUrl ? (
               <Image
-                src={`https://pm-s3-images.s3.us-east-2.amazonaws.com/${currentUserDetails.profilePictureUrl}`}
-                alt={currentUserDetails.username || "User Profile Picture"}
+                src={`https://pm-s3-images.s3.us-east-2.amazonaws.com/${profilePictureUrl}`}
+                alt={displayUsername}
                 width={100}
                 height={50}
                 className="h-full rounded-full object-cover"
@@ -149,7 +165,7 @@ const Sidebar = () => {
             )}
           </div>
 
-          <span className="mx-3 text-gray-800 dark:text-white">{currentUserDetails.username}</span>
+          <span className="mx-3 text-gray-800 dark:text-white">{displayUsername}</span>
 
           <button
             className="self-start rounded bg-blue-400 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500 md:block"

@@ -1,7 +1,11 @@
 // server/src/routes/auth.ts
 import { Router } from "express";
+import { verifyCognito } from "../middleware/verifyCognito";
+import { getMe } from "../controllers/authController";
 
 const router = Router();
+
+router.get("/me", verifyCognito, getMe)
 
 function normalizeDomain(domain: string) {
   return domain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
