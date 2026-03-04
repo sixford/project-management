@@ -34,13 +34,10 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
     </div>
   );
 };
-
 const DashboardWrapper = ({ children }: { children: React.ReactNode }) => {
   return (
     <StoreProvider>
-      <AuthProvider>
-        <DashboardLayout>{children}</DashboardLayout>
-      </AuthProvider>
+      <DashboardLayout>{children}</DashboardLayout>
     </StoreProvider>
   );
 };

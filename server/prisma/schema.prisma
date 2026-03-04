@@ -21,6 +21,9 @@ model User {
   profilePictureUrl String?
   teamId            Int?
 
+  // ✅ add this
+  ownedProjects Project[]
+
   authoredTasks   Task[]           @relation("TaskAuthor")
   assignedTasks   Task[]           @relation("TaskAssignee")
   taskAssignments TaskAssignment[]
@@ -39,11 +42,16 @@ model Team {
 }
 
 model Project {
-  id           Int           @id @default(autoincrement())
-  name         String
-  description  String?
-  startDate    DateTime?
-  endDate      DateTime?
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+
+  // ✅ add these two lines
+  ownerUserId Int?
+  owner       User? @relation(fields: [ownerUserId], references: [userId])
+
   tasks        Task[]
   projectTeams ProjectTeam[]
 }

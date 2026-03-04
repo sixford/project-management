@@ -1,5 +1,15 @@
+"use client";
+
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { fetchAuthSession, getCurrentUser } from "aws-amplify/auth";
+import { tokenStore } from "@/lib/auth";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  // Helps you fail fast in dev if env isn't being read
+  // (Remember: restart `npm run dev` after changing .env)
+  console.warn("NEXT_PUBLIC_API_BASE_URL is not set");
+}
 
 export interface Project {
   id: number;
@@ -27,7 +37,7 @@ export enum Status {
 export interface User {
   userId?: number;
   username: string;
-  email: string;
+  email?: string;
   profilePictureUrl?: string;
   cognitoId?: string;
   teamId?: number;
@@ -75,42 +85,59 @@ export interface Team {
 }
 
 export const api = createApi({
+  reducerPath: "api",
+  tagTypes: ["Projects", "Tasks", "Users", "Teams"],
+  refetchOnFocus: true,
+  refetchOnReconnect: true,
   baseQuery: fetchBaseQuery({
-    baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL,
-    prepareHeaders: async (headers) => {
-      const session = await fetchAuthSession();
-      const { accessToken } = session.tokens ?? {};
-      if (accessToken) {
-        headers.set("Authorization", `Bearer ${accessToken}`);
+    baseUrl: API_BASE_URL,
+    prepareHeaders: (headers) => {
+      // IMPORTANT: for API calls use access token
+      const token = tokenStore.getAccessToken();
+
+      if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
       }
       return headers;
     },
   }),
-  reducerPath: "api",
-  tagTypes: ["Projects", "Tasks", "Users", "Teams"],
   endpoints: (build) => ({
-    getAuthUser: build.query({
-      queryFn: async (_, _queryApi, _extraoptions, fetchWithBQ) => {
+    getAuthUser: build.query<
+      { userSub: string | null; user: any | null; userDetails: User | null },
+      void
+    >({
+      // If you later create a real backend route, switch to:
+      // query: () => "auth/me",
+      queryFn: async () => {
+        const idToken = tokenStore.getIdToken();
+        if (!idToken) {
+          return { error: { status: 401, data: "No id_token found" } as any };
+        }
+
         try {
-          const user = await getCurrentUser();
-          const session = await fetchAuthSession();
-          if (!session) throw new Error("No session found");
-          const { userSub } = session;
-          const { accessToken } = session.tokens ?? {};
+          const parts = idToken.split(".");
+          const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+          const payload = JSON.parse(atob(padded));
 
-          const userDetailsResponse = await fetchWithBQ(`users/${userSub}`);
-          const userDetails = userDetailsResponse.data as User;
+          const userSub = payload.sub ?? null;
+          const email = payload.email ?? null;
+          const username = payload["cognito:username"] ?? payload.username ?? null;
 
-          return { data: { user, userSub, userDetails } };
-        } catch (error: any) {
-          return { error: error.message || "Could not fetch user data" };
+          return {
+            data: { userSub, user: { username, email }, userDetails: null },
+          };
+        } catch {
+          return { error: { status: 400, data: "Could not decode id_token" } as any };
         }
       },
     }),
+
     getProjects: build.query<Project[], void>({
       query: () => "projects",
       providesTags: ["Projects"],
     }),
+
     createProject: build.mutation<Project, Partial<Project>>({
       query: (project) => ({
         url: "projects",
@@ -119,6 +146,7 @@ export const api = createApi({
       }),
       invalidatesTags: ["Projects"],
     }),
+
     getTasks: build.query<Task[], { projectId: number }>({
       query: ({ projectId }) => `tasks?projectId=${projectId}`,
       providesTags: (result) =>
@@ -126,13 +154,7 @@ export const api = createApi({
           ? result.map(({ id }) => ({ type: "Tasks" as const, id }))
           : [{ type: "Tasks" as const }],
     }),
-    getTasksByUser: build.query<Task[], number>({
-      query: (userId) => `tasks/user/${userId}`,
-      providesTags: (result, error, userId) =>
-        result
-          ? result.map(({ id }) => ({ type: "Tasks", id }))
-          : [{ type: "Tasks", id: userId }],
-    }),
+
     createTask: build.mutation<Task, Partial<Task>>({
       query: (task) => ({
         url: "tasks",
@@ -141,26 +163,28 @@ export const api = createApi({
       }),
       invalidatesTags: ["Tasks"],
     }),
+
     updateTaskStatus: build.mutation<Task, { taskId: number; status: string }>({
       query: ({ taskId, status }) => ({
         url: `tasks/${taskId}/status`,
         method: "PATCH",
         body: { status },
       }),
-      invalidatesTags: (result, error, { taskId }) => [
-        { type: "Tasks", id: taskId },
-      ],
+      invalidatesTags: (_r, _e, { taskId }) => [{ type: "Tasks", id: taskId }],
     }),
+
     getUsers: build.query<User[], void>({
       query: () => "users",
       providesTags: ["Users"],
     }),
+
     getTeams: build.query<Team[], void>({
       query: () => "teams",
       providesTags: ["Teams"],
     }),
+
     search: build.query<SearchResults, string>({
-      query: (query) => `search?query=${query}`,
+      query: (query) => `search?query=${encodeURIComponent(query)}`,
     }),
   }),
 });
@@ -174,6 +198,5 @@ export const {
   useSearchQuery,
   useGetUsersQuery,
   useGetTeamsQuery,
-  useGetTasksByUserQuery,
-  useGetAuthUserQuery,
+  useGetAuthUserQuery, // ✅ THIS is the one you’re missing at runtime
 } = api;
