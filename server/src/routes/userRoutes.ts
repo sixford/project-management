@@ -1,11 +1,14 @@
 import { Router } from "express";
-
-import { getUser, getUsers, postUser } from "../controllers/userController";
+import { verifyCognito } from "../middleware/verifyCognito";
+import { getUser, getUsers } from "../controllers/userController";
 
 const router = Router();
 
-router.get("/", getUsers);
-router.post("/", postUser);
-router.get("/:cognitoId", getUser);
+// ✅ protected
+router.get("/", verifyCognito, getUsers);
+router.get("/:cognitoId", verifyCognito, getUser);
+
+// ❌ recommend removing postUser in production (users come from auth)
+// router.post("/", verifyCognito, postUser);
 
 export default router;
