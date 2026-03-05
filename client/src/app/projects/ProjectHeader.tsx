@@ -14,9 +14,10 @@ import ModalNewProject from "./ModalNewProject";
 type Props = {
   activeTab: string;
   setActiveTab: (tabName: string) => void;
+  title: string; // ✅ NEW
 };
 
-const ProjectHeader = ({ activeTab, setActiveTab }: Props) => {
+const ProjectHeader = ({ activeTab, setActiveTab, title }: Props) => {
   const [isModalNewProjectOpen, setIsModalNewProjectOpen] = useState(false);
 
   return (
@@ -25,15 +26,17 @@ const ProjectHeader = ({ activeTab, setActiveTab }: Props) => {
         isOpen={isModalNewProjectOpen}
         onClose={() => setIsModalNewProjectOpen(false)}
       />
+
       <div className="pb-6 pt-6 lg:pb-4 lg:pt-8">
         <Header
-          name="Product Design Development"
+          name={title} // ✅ was hardcoded
           buttonComponent={
             <button
               className="flex items-center rounded-md bg-blue-primary px-3 py-2 text-white hover:bg-blue-600"
               onClick={() => setIsModalNewProjectOpen(true)}
+              type="button"
             >
-              <PlusSquare className="mr-2 h-5 w-5" /> New Boards
+              <PlusSquare className="mr-2 h-5 w-5" /> New Project
             </button>
           }
         />
@@ -67,11 +70,18 @@ const ProjectHeader = ({ activeTab, setActiveTab }: Props) => {
             activeTab={activeTab}
           />
         </div>
+
         <div className="flex items-center gap-2">
-          <button className="text-gray-500 hover:text-gray-600 dark:text-neutral-500 dark:hover:text-gray-300">
+          <button
+            className="text-gray-500 hover:text-gray-600 dark:text-neutral-500 dark:hover:text-gray-300"
+            type="button"
+          >
             <Filter className="h-5 w-5" />
           </button>
-          <button className="text-gray-500 hover:text-gray-600 dark:text-neutral-500 dark:hover:text-gray-300">
+          <button
+            className="text-gray-500 hover:text-gray-600 dark:text-neutral-500 dark:hover:text-gray-300"
+            type="button"
+          >
             <Share2 className="h-5 w-5" />
           </button>
           <div className="relative">
@@ -104,6 +114,7 @@ const TabButton = ({ name, icon, setActiveTab, activeTab }: TabButtonProps) => {
         isActive ? "text-blue-600 after:bg-blue-600 dark:text-white" : ""
       }`}
       onClick={() => setActiveTab(name)}
+      type="button"
     >
       {icon}
       {name}
