@@ -1,17 +1,19 @@
-// components/ModalNewTask/index.tsx
+"use client";
+
 import Modal from "@/components/Modal";
-import { Priority, Status, useCreateTaskMutation } from "@/state/api";
-import React, { useState } from "react";
+import { Priority, Status, useCreateTaskMutation, useGetUsersQuery } from "@/state/api";
+import React, { useEffect, useMemo, useState } from "react";
 import { formatISO } from "date-fns";
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
-  id?: string | null; // project id from route
+  id?: string | null; // project id from route if provided
 };
 
 const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
-  const [createTask, { isLoading }] = useCreateTaskMutation();
+  const [createTask, { isLoading, error }] = useCreateTaskMutation();
+  const { data: users } = useGetUsersQuery();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -20,46 +22,66 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
   const [tags, setTags] = useState("");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [assignedUserId, setAssignedUserId] = useState("");
+
+  // optional if you ever open modal without a project page
   const [projectId, setProjectId] = useState("");
 
-  const effectiveProjectId = id !== null ? Number(id) : Number(projectId);
+  // assignee dropdown
+  const [assignedUserId, setAssignedUserId] = useState<string>("");
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setTitle("");
+    setDescription("");
+    setStatus(Status.ToDo);
+    setPriority(Priority.Backlog);
+    setTags("");
+    setStartDate("");
+    setDueDate("");
+    setProjectId("");
+    setAssignedUserId("");
+  }, [isOpen]);
+
+  const effectiveProjectId = useMemo(() => {
+    return id !== null ? Number(id) : projectId ? Number(projectId) : null;
+  }, [id, projectId]);
 
   const isFormValid = () => {
-    return !!title && Number.isFinite(effectiveProjectId) && effectiveProjectId > 0;
+    return Boolean(title) && Boolean(effectiveProjectId);
   };
 
+  const inputStyles =
+    "w-full rounded border border-gray-300 p-2 shadow-sm dark:border-dark-tertiary dark:bg-dark-tertiary dark:text-white dark:focus:outline-none";
+
+  const selectStyles =
+    "mb-4 block w-full rounded border border-gray-300 px-3 py-2 dark:border-dark-tertiary dark:bg-dark-tertiary dark:text-white dark:focus:outline-none";
+
   const handleSubmit = async () => {
-    if (!isFormValid()) return;
+    if (!isFormValid() || !effectiveProjectId) return;
 
-    const formattedStartDate = startDate
-      ? formatISO(new Date(startDate), { representation: "complete" })
-      : undefined;
-
-    const formattedDueDate = dueDate
-      ? formatISO(new Date(dueDate), { representation: "complete" })
-      : undefined;
-
-    await createTask({
+    const payload: any = {
       title,
       description,
       status,
       priority,
       tags,
-      startDate: formattedStartDate,
-      dueDate: formattedDueDate,
-      assignedUserId: assignedUserId ? Number(assignedUserId) : undefined,
       projectId: effectiveProjectId,
-    });
+      // ✅ authorUserId no longer sent (server sets it)
+      assignedUserId: assignedUserId ? Number(assignedUserId) : undefined,
+      startDate: startDate
+        ? formatISO(new Date(startDate), { representation: "complete" })
+        : undefined,
+      dueDate: dueDate
+        ? formatISO(new Date(dueDate), { representation: "complete" })
+        : undefined,
+    };
 
-    onClose();
+    const res = await createTask(payload);
+
+    if ("data" in res) {
+      onClose();
+    }
   };
-
-  const selectStyles =
-    "mb-4 block w-full rounded border border-gray-300 px-3 py-2 dark:border-dark-tertiary dark:bg-dark-tertiary dark:text-white dark:focus:outline-none";
-
-  const inputStyles =
-    "w-full rounded border border-gray-300 p-2 shadow-sm dark:border-dark-tertiary dark:bg-dark-tertiary dark:text-white dark:focus:outline-none";
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} name="Create New Task">
@@ -133,23 +155,36 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
           />
         </div>
 
-        <input
-          type="text"
-          className={inputStyles}
-          placeholder="Assigned User ID (optional for now)"
+        {/* ✅ Assignee dropdown */}
+        <select
+          className={selectStyles}
           value={assignedUserId}
           onChange={(e) => setAssignedUserId(e.target.value)}
-        />
+        >
+          <option value="">Assign to… (optional)</option>
+          {(users ?? []).map((u) => (
+            <option key={u.userId} value={String(u.userId ?? "")}>
+              {u.username}
+            </option>
+          ))}
+        </select>
 
+        {/* Only show projectId field if not on /projects/[id] */}
         {id === null && (
           <input
-            type="text"
+            type="number"
             className={inputStyles}
-            placeholder="ProjectId"
+            placeholder="Project ID"
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
           />
         )}
+
+        {error ? (
+          <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+            {"data" in (error as any) ? JSON.stringify((error as any).data) : "Failed to create task"}
+          </p>
+        ) : null}
 
         <button
           type="submit"
