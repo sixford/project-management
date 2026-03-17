@@ -1,9 +1,8 @@
 import React from "react";
 import ReusablePriorityPage from "../reusablePriorityPage";
-import { Priority } from "@/state/api";
 
-const Urgent = () => {
-  return <ReusablePriorityPage priority={Priority.High} />;
+const HighPage = () => {
+  return <ReusablePriorityPage priority="High" />;
 };
 
-export default Urgent;
+export default HighPage;

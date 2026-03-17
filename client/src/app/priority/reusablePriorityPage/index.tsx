@@ -6,7 +6,6 @@ import ModalNewTask from "@/components/ModalNewTask";
 import TaskCard from "@/components/TaskCard";
 import { dataGridClassNames, dataGridSxStyles } from "@/lib/utils";
 import {
-  Priority,
   Task,
   useGetAuthUserQuery,
   useGetTasksByUserQuery,
@@ -15,7 +14,7 @@ import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import React, { useState } from "react";
 
 type Props = {
-  priority: Priority;
+  priority: string;
 };
 
 const columns: GridColDef[] = [
