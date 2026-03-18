@@ -6,65 +6,108 @@ import TaskCard from "@/components/TaskCard";
 import UserCard from "@/components/UserCard";
 import { useSearchQuery } from "@/state/api";
 import { debounce } from "lodash";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const Search = () => {
+  const [inputValue, setInputValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+
+  const debouncedSetSearch = useMemo(
+    () =>
+      debounce((value: string) => {
+        setSearchTerm(value);
+      }, 400),
+    []
+  );
+
+  useEffect(() => {
+    return () => {
+      debouncedSetSearch.cancel();
+    };
+  }, [debouncedSetSearch]);
+
   const {
     data: searchResults,
     isLoading,
     isError,
   } = useSearchQuery(searchTerm, {
-    skip: searchTerm.length < 3,
+    skip: searchTerm.trim().length < 3,
   });
 
-  const handleSearch = debounce(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchTerm(event.target.value);
-    },
-    500,
-  );
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setInputValue(value);
+    debouncedSetSearch(value);
+  };
 
-  useEffect(() => {
-    return handleSearch.cancel;
-  }, [handleSearch.cancel]);
+  const hasResults =
+    !!searchResults &&
+    ((searchResults.tasks?.length ?? 0) > 0 ||
+      (searchResults.projects?.length ?? 0) > 0 ||
+      (searchResults.users?.length ?? 0) > 0);
 
   return (
     <div className="p-8">
       <Header name="Search" />
-      <div>
+
+      <div className="mt-4">
         <input
           type="text"
-          placeholder="Search..."
-          className="w-1/2 rounded border p-3 shadow"
-          onChange={handleSearch}
+          placeholder="Search tasks, projects, users..."
+          className="w-full rounded border p-3 shadow md:w-1/2"
+          value={inputValue}
+          onChange={handleChange}
         />
       </div>
+
       <div className="p-5">
+        {inputValue.trim().length > 0 && inputValue.trim().length < 3 && (
+          <p className="text-sm text-gray-500">
+            Enter at least 3 characters to search.
+          </p>
+        )}
+
         {isLoading && <p>Loading...</p>}
         {isError && <p>Error occurred while fetching search results.</p>}
-        {!isLoading && !isError && searchResults && (
-          <div>
-            {searchResults.tasks && searchResults.tasks?.length > 0 && (
-              <h2>Tasks</h2>
-            )}
-            {searchResults.tasks?.map((task) => (
-              <TaskCard key={task.id} task={task} />
-            ))}
 
-            {searchResults.projects && searchResults.projects?.length > 0 && (
-              <h2>Projects</h2>
-            )}
-            {searchResults.projects?.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
+        {!isLoading && !isError && searchTerm.trim().length >= 3 && !hasResults && (
+          <p className="text-gray-500">No results found.</p>
+        )}
 
-            {searchResults.users && searchResults.users?.length > 0 && (
-              <h2>Users</h2>
+        {!isLoading && !isError && searchResults && hasResults && (
+          <div className="space-y-8">
+            {searchResults.tasks && searchResults.tasks.length > 0 && (
+              <section>
+                <h2 className="mb-3 text-xl font-semibold">Tasks</h2>
+                <div className="space-y-3">
+                  {searchResults.tasks.map((task) => (
+                    <TaskCard key={task.id} task={task} />
+                  ))}
+                </div>
+              </section>
             )}
-            {searchResults.users?.map((user) => (
-              <UserCard key={user.userId} user={user} />
-            ))}
+
+            {searchResults.projects && searchResults.projects.length > 0 && (
+              <section>
+                <h2 className="mb-3 text-xl font-semibold">Projects</h2>
+                <div className="space-y-3">
+                  {searchResults.projects.map((project) => (
+                    <ProjectCard key={project.id} project={project} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {searchResults.users && searchResults.users.length > 0 && (
+              <section>
+                <h2 className="mb-3 text-xl font-semibold">Users</h2>
+                <div className="space-y-3">
+                  {searchResults.users.map((user) => (
+                    <UserCard key={user.userId} user={user} />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>

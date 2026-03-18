@@ -1,14 +1,19 @@
 "use client";
 
 import Modal from "@/components/Modal";
-import { Priority, Status, useCreateTaskMutation, useGetUsersQuery } from "@/state/api";
+import {
+  Priority,
+  Status,
+  useCreateTaskMutation,
+  useGetUsersQuery,
+} from "@/state/api";
 import React, { useEffect, useMemo, useState } from "react";
-import { formatISO } from "date-fns";
+import { formatISO, isAfter } from "date-fns";
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
-  id?: string | null; // project id from route if provided
+  id?: string | null;
 };
 
 const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
@@ -22,12 +27,9 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
   const [tags, setTags] = useState("");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-
-  // optional if you ever open modal without a project page
   const [projectId, setProjectId] = useState("");
-
-  // assignee dropdown
-  const [assignedUserId, setAssignedUserId] = useState<string>("");
+  const [assignedUserId, setAssignedUserId] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -40,15 +42,17 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
     setDueDate("");
     setProjectId("");
     setAssignedUserId("");
+    setLocalError(null);
   }, [isOpen]);
 
   const effectiveProjectId = useMemo(() => {
-    return id !== null ? Number(id) : projectId ? Number(projectId) : null;
+    const value = id !== null ? Number(id) : projectId ? Number(projectId) : null;
+    return value && Number.isFinite(value) && value > 0 ? value : null;
   }, [id, projectId]);
 
-  const isFormValid = () => {
-    return Boolean(title) && Boolean(effectiveProjectId);
-  };
+  const isFormValid = useMemo(() => {
+    return title.trim().length > 0 && effectiveProjectId !== null;
+  }, [title, effectiveProjectId]);
 
   const inputStyles =
     "w-full rounded border border-gray-300 p-2 shadow-sm dark:border-dark-tertiary dark:bg-dark-tertiary dark:text-white dark:focus:outline-none";
@@ -56,30 +60,55 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
   const selectStyles =
     "mb-4 block w-full rounded border border-gray-300 px-3 py-2 dark:border-dark-tertiary dark:bg-dark-tertiary dark:text-white dark:focus:outline-none";
 
+  const getErrorMessage = () => {
+    if (localError) return localError;
+    if (!error) return null;
+    if ("data" in error) {
+      const data = error.data as { message?: string } | string;
+      if (typeof data === "string") return data;
+      if (data?.message) return data.message;
+    }
+    return "Failed to create task";
+  };
+
   const handleSubmit = async () => {
-    if (!isFormValid() || !effectiveProjectId) return;
+    if (!isFormValid || effectiveProjectId === null) return;
 
-    const payload: any = {
-      title,
-      description,
-      status,
-      priority,
-      tags,
-      projectId: effectiveProjectId,
-      // ✅ authorUserId no longer sent (server sets it)
-      assignedUserId: assignedUserId ? Number(assignedUserId) : undefined,
-      startDate: startDate
-        ? formatISO(new Date(startDate), { representation: "complete" })
-        : undefined,
-      dueDate: dueDate
-        ? formatISO(new Date(dueDate), { representation: "complete" })
-        : undefined,
-    };
+    setLocalError(null);
 
-    const res = await createTask(payload);
+    if (startDate && dueDate) {
+      const start = new Date(startDate);
+      const due = new Date(dueDate);
+      if (isAfter(start, due)) {
+        setLocalError("Due date cannot be earlier than start date.");
+        return;
+      }
+    }
 
-    if ("data" in res) {
+    try {
+      await createTask({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        status,
+        priority,
+        tags: tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+          .join(",") || undefined,
+        projectId: effectiveProjectId,
+        assignedUserId: assignedUserId ? Number(assignedUserId) : undefined,
+        startDate: startDate
+          ? formatISO(new Date(startDate), { representation: "complete" })
+          : undefined,
+        dueDate: dueDate
+          ? formatISO(new Date(dueDate), { representation: "complete" })
+          : undefined,
+      }).unwrap();
+
       onClose();
+    } catch {
+      // handled by RTK error state
     }
   };
 
@@ -89,7 +118,7 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
         className="mt-4 space-y-6"
         onSubmit={(e) => {
           e.preventDefault();
-          handleSubmit();
+          void handleSubmit();
         }}
       >
         <input
@@ -155,7 +184,6 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
           />
         </div>
 
-        {/* ✅ Assignee dropdown */}
         <select
           className={selectStyles}
           value={assignedUserId}
@@ -169,7 +197,6 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
           ))}
         </select>
 
-        {/* Only show projectId field if not on /projects/[id] */}
         {id === null && (
           <input
             type="number"
@@ -180,18 +207,18 @@ const ModalNewTask = ({ isOpen, onClose, id = null }: Props) => {
           />
         )}
 
-        {error ? (
+        {getErrorMessage() ? (
           <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
-            {"data" in (error as any) ? JSON.stringify((error as any).data) : "Failed to create task"}
+            {getErrorMessage()}
           </p>
         ) : null}
 
         <button
           type="submit"
           className={`focus-offset-2 mt-4 flex w-full justify-center rounded-md border border-transparent bg-blue-primary px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600 ${
-            !isFormValid() || isLoading ? "cursor-not-allowed opacity-50" : ""
+            !isFormValid || isLoading ? "cursor-not-allowed opacity-50" : ""
           }`}
-          disabled={!isFormValid() || isLoading}
+          disabled={!isFormValid || isLoading}
         >
           {isLoading ? "Creating..." : "Create Task"}
         </button>
