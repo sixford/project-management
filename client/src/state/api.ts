@@ -168,6 +168,14 @@ export const api = createApi({
           : [{ type: "Tasks" as const }],
     }),
 
+    getMyTasks: build.query<Task[], void>({
+  query: () => "tasks/my",
+  providesTags: (result) =>
+    result
+      ? result.map(({ id }) => ({ type: "Tasks" as const, id }))
+      : [{ type: "Tasks" as const }],
+}),
+
     // ✅ OPTION B: restore this hook for reusablePriorityPage etc.
     getTasksByUser: build.query<Task[], number>({
       query: (userId) => `tasks/user/${userId}`,
@@ -215,6 +223,7 @@ export const {
   useGetProjectsQuery,
   useCreateProjectMutation,
   useGetTasksQuery,
+  useGetMyTasksQuery,
   useGetTasksByUserQuery, // ✅ added back
   useCreateTaskMutation,
   useUpdateTaskStatusMutation,
