@@ -55,16 +55,12 @@ const Project = ({ params }: Props) => {
         id={String(projectId)}
       />
 
-      <ProjectHeader
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        // ✅ new prop so header can show real name
-        title={
-          projectsLoading
-            ? "Loading…"
-            : project?.name ?? `Project #${projectId}`
-        }
-      />
+<ProjectHeader
+  activeTab={activeTab}
+  setActiveTab={setActiveTab}
+  title={projectsLoading ? "Loading…" : project?.name ?? `Project #${projectId}`}
+  onNewTask={() => setIsModalNewTaskOpen(true)}
+/>
 
       {activeTab === "Board" && (
         <Board id={String(projectId)} setIsModalNewTaskOpen={setIsModalNewTaskOpen} />
