@@ -3,29 +3,43 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-export const getTeams = async (req: Request, res: Response): Promise<void> => {
+export const getTeams = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const teams = await prisma.team.findMany();
+    const teams = await prisma.team.findMany({
+      orderBy: { id: "asc" },
+    });
 
-    const teamsWithUsernames = await Promise.all(
-      teams.map(async (team: any) => {
-        const productOwner = await prisma.user.findUnique({
-          where: { userId: team.productOwnerUserId! },
-          select: { username: true },
-        });
-
-        const projectManager = await prisma.user.findUnique({
-          where: { userId: team.projectManagerUserId! },
-          select: { username: true },
-        });
-
-        return {
-          ...team,
-          productOwnerUsername: productOwner?.username,
-          projectManagerUsername: projectManager?.username,
-        };
-      })
+    const userIds = Array.from(
+      new Set(
+        teams.flatMap((team) =>
+          [team.productOwnerUserId, team.projectManagerUserId].filter(
+            (id): id is number => id !== null && id !== undefined
+          )
+        )
+      )
     );
+
+    const users = await prisma.user.findMany({
+      where: {
+        userId: { in: userIds },
+      },
+      select: {
+        userId: true,
+        username: true,
+      },
+    });
+
+    const usersMap = new Map(users.map((user) => [user.userId, user.username]));
+
+    const teamsWithUsernames = teams.map((team) => ({
+      ...team,
+      productOwnerUsername: team.productOwnerUserId
+        ? usersMap.get(team.productOwnerUserId) ?? null
+        : null,
+      projectManagerUsername: team.projectManagerUserId
+        ? usersMap.get(team.projectManagerUserId) ?? null
+        : null,
+    }));
 
     res.json(teamsWithUsernames);
   } catch (error: any) {
