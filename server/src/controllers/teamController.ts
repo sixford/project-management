@@ -48,3 +48,33 @@ export const getTeams = async (_req: Request, res: Response): Promise<void> => {
       .json({ message: `Error retrieving teams: ${error.message}` });
   }
 };
+
+export const createTeam = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { teamName, productOwnerUserId, projectManagerUserId } = req.body;
+
+    if (!teamName || typeof teamName !== "string") {
+      res.status(400).json({ message: "teamName is required" });
+      return;
+    }
+
+    const newTeam = await prisma.team.create({
+      data: {
+        teamName,
+        // ✅ roles are optional (good design)
+        productOwnerUserId: productOwnerUserId
+          ? Number(productOwnerUserId)
+          : null,
+        projectManagerUserId: projectManagerUserId
+          ? Number(projectManagerUserId)
+          : null,
+      },
+    });
+
+    res.status(201).json(newTeam);
+  } catch (error: any) {
+    res
+      .status(500)
+      .json({ message: `Error creating team: ${error.message}` });
+  }
+};

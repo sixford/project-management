@@ -208,10 +208,28 @@ export const api = createApi({
       providesTags: ["Users"],
     }),
 
+    createTeam: build.mutation<
+  Team,
+  {
+    teamName: string;
+    productOwnerUserId?: number;
+    projectManagerUserId?: number;
+  }
+  >({
+  query: (team) => ({
+    url: "teams",
+    method: "POST",
+    body: team,
+  }),
+  invalidatesTags: ["Teams"],
+}),
+
     getTeams: build.query<Team[], void>({
       query: () => "teams",
       providesTags: ["Teams"],
     }),
+
+
 
     search: build.query<SearchResults, string>({
       query: (query) => `search?query=${encodeURIComponent(query)}`,
@@ -226,6 +244,7 @@ export const {
   useGetMyTasksQuery,
   useGetTasksByUserQuery, // ✅ added back
   useCreateTaskMutation,
+  useCreateTeamMutation,
   useUpdateTaskStatusMutation,
   useSearchQuery,
   useGetUsersQuery,
