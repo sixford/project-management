@@ -17,9 +17,9 @@ const Navbar = () => {
 
   const handleSignOut = () => {
     tokenStore.clear();
-    window.location.href = buildLogoutUrl();
+    window.location.href = "/sign-in";
   };
-
+  
   if (!currentUserDetails) return null;
 
   return (

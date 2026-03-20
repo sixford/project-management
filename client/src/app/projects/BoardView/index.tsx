@@ -8,6 +8,7 @@ import { Task as TaskType } from "@/state/api";
 import { EllipsisVertical, MessageSquareMore, Plus, User } from "lucide-react";
 import { format } from "date-fns";
 import Image from "next/image";
+import { getS3ImageUrl } from "@/lib/utils";
 
 type BoardProps = {
   id: string;
@@ -33,7 +34,11 @@ const BoardView = ({ id, setIsModalNewTaskOpen }: BoardProps) => {
   const [updateTaskStatus, { isLoading: isUpdatingStatus }] =
     useUpdateTaskStatusMutation();
 
-  const moveTask = async (taskId: number, fromStatus: string | undefined, toStatus: string) => {
+  const moveTask = async (
+    taskId: number,
+    fromStatus: string | undefined,
+    toStatus: string
+  ) => {
     if (!taskId || !toStatus || fromStatus === toStatus) return;
 
     try {
@@ -46,7 +51,9 @@ const BoardView = ({ id, setIsModalNewTaskOpen }: BoardProps) => {
   const safeTasks = useMemo(() => tasks ?? [], [tasks]);
 
   if (isLoading) return <div className="p-4">Loading board...</div>;
-  if (error) return <div className="p-4">An error occurred while fetching tasks.</div>;
+  if (error) {
+    return <div className="p-4">An error occurred while fetching tasks.</div>;
+  }
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -81,7 +88,11 @@ const TaskColumn = ({
   setIsModalNewTaskOpen,
   isUpdatingStatus,
 }: TaskColumnProps) => {
-  const [{ isOver, canDrop }, drop] = useDrop<DragItem, void, { isOver: boolean; canDrop: boolean }>(
+  const [{ isOver, canDrop }, drop] = useDrop<
+    DragItem,
+    void,
+    { isOver: boolean; canDrop: boolean }
+  >(
     () => ({
       accept: "task",
       canDrop: (item) => item.status !== status,
@@ -108,12 +119,12 @@ const TaskColumn = ({
     isOver && canDrop ? "bg-blue-100 dark:bg-neutral-950" : "";
 
   return (
-<div
-  ref={(node) => {
-    if (node) drop(node);
-  }}
-  className={`rounded-lg py-2 xl:px-2 ${highlightClass}`}
->
+    <div
+      ref={(node) => {
+        if (node) drop(node);
+      }}
+      className={`rounded-lg py-2 xl:px-2 ${highlightClass}`}
+    >
       <div className="mb-3 flex w-full">
         <div
           className="w-2 rounded-s-lg"
@@ -195,6 +206,10 @@ const Task = ({ task }: TaskProps) => {
   const numberOfComments = task.comments?.length || 0;
   const firstAttachment = task.attachments?.[0];
 
+  const coverImageUrl = getS3ImageUrl(firstAttachment?.fileURL);
+  const assigneeAvatarUrl = getS3ImageUrl(task.assignee?.profilePictureUrl);
+  const authorAvatarUrl = getS3ImageUrl(task.author?.profilePictureUrl);
+
   const PriorityTag = ({ priority }: { priority: TaskType["priority"] }) => (
     <div
       className={`rounded-full px-2 py-1 text-xs font-semibold ${
@@ -217,18 +232,18 @@ const Task = ({ task }: TaskProps) => {
     "h-8 w-8 rounded-full border-2 border-white object-cover dark:border-dark-secondary";
 
   return (
-<div
-  ref={(node) => {
-    if (node) drag(node);
-  }}
-  className={`mb-4 rounded-md bg-white shadow dark:bg-dark-secondary ${
-    isDragging ? "opacity-50" : "opacity-100"
-  }`}
->
-      {firstAttachment?.fileURL && !coverError && (
+    <div
+      ref={(node) => {
+        if (node) drag(node);
+      }}
+      className={`mb-4 rounded-md bg-white shadow dark:bg-dark-secondary ${
+        isDragging ? "opacity-50" : "opacity-100"
+      }`}
+    >
+      {coverImageUrl && !coverError && (
         <Image
-          src={`https://pm-s3-images.s3.us-east-2.amazonaws.com/${firstAttachment.fileURL}`}
-          alt={firstAttachment.fileName || "Task attachment"}
+          src={coverImageUrl}
+          alt={firstAttachment?.fileName || "Task attachment"}
           width={400}
           height={200}
           className="h-auto w-full rounded-t-md"
@@ -285,10 +300,10 @@ const Task = ({ task }: TaskProps) => {
         <div className="mt-3 flex items-center justify-between">
           <div className="flex -space-x-[6px] overflow-hidden">
             {task.assignee ? (
-              task.assignee.profilePictureUrl && !assigneeError ? (
+              assigneeAvatarUrl && !assigneeError ? (
                 <Image
                   key={`assignee-${task.assignee.userId}`}
-                  src={`https://pm-s3-images.s3.us-east-2.amazonaws.com/${task.assignee.profilePictureUrl}`}
+                  src={assigneeAvatarUrl}
                   alt={task.assignee.username}
                   width={30}
                   height={30}
@@ -306,10 +321,10 @@ const Task = ({ task }: TaskProps) => {
             ) : null}
 
             {task.author ? (
-              task.author.profilePictureUrl && !authorError ? (
+              authorAvatarUrl && !authorError ? (
                 <Image
                   key={`author-${task.author.userId}`}
-                  src={`https://pm-s3-images.s3.us-east-2.amazonaws.com/${task.author.profilePictureUrl}`}
+                  src={authorAvatarUrl}
                   alt={task.author.username}
                   width={30}
                   height={30}
