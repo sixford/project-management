@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
-import AuthProvider from "./authProvider";
 import StoreProvider, { useAppSelector } from "./redux";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
@@ -18,7 +18,7 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
     } else {
       document.documentElement.classList.remove("dark");
     }
-  });
+  }, [isDarkMode]);
 
   return (
     <div className="flex min-h-screen w-full bg-gray-50 text-gray-900">
@@ -34,10 +34,24 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
     </div>
   );
 };
+
+const AppShell = ({ children }: { children: React.ReactNode }) => {
+  const pathname = usePathname();
+
+  const authRoutes = ["/", "/sign-in", "/sign-up"];
+  const isAuthRoute = authRoutes.includes(pathname);
+
+  if (isAuthRoute) {
+    return <>{children}</>;
+  }
+
+  return <DashboardLayout>{children}</DashboardLayout>;
+};
+
 const DashboardWrapper = ({ children }: { children: React.ReactNode }) => {
   return (
     <StoreProvider>
-      <DashboardLayout>{children}</DashboardLayout>
+      <AppShell>{children}</AppShell>
     </StoreProvider>
   );
 };
