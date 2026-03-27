@@ -1,47 +1,46 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { getAuthedUser } from "../utils/getAuthedUser";
 
 const prisma = new PrismaClient();
-
-async function getOrCreateAuthedUser(req: Request) {
-  const sub = req.auth?.sub;
-  if (!sub) {
-    throw new Error("Missing req.auth.sub (did you forget verifyCognito middleware?)");
-  }
-
-  const payload = req.auth?.payload ?? {};
-
-  const email: string | undefined = payload.email;
-  const usernameFromToken: string | undefined =
-    payload["cognito:username"] ??
-    payload.username ??
-    (email ? email.split("@")[0] : undefined);
-
-  const username = usernameFromToken ?? `user_${sub.slice(0, 8)}`;
-
-  const user = await prisma.user.upsert({
-    where: { cognitoId: sub },
-    update: {},
-    create: {
-      cognitoId: sub,
-      username,
-    },
-  });
-
-  return user;
-}
 
 export const getTasks = async (req: Request, res: Response): Promise<void> => {
   const { projectId } = req.query;
 
   try {
+    const authedUser = await getAuthedUser(req);
+
     if (!projectId) {
       res.status(400).json({ message: "projectId query param is required" });
       return;
     }
 
+    const numericProjectId = Number(projectId);
+
+    if (!Number.isFinite(numericProjectId) || numericProjectId <= 0) {
+      res.status(400).json({ message: "Invalid projectId" });
+      return;
+    }
+
+    const project = await prisma.project.findFirst({
+      where: {
+        id: numericProjectId,
+        ownerUserId: authedUser.userId,
+      },
+    });
+
+    if (!project) {
+      res.status(404).json({ message: "Project not found" });
+      return;
+    }
+
     const tasks = await prisma.task.findMany({
-      where: { projectId: Number(projectId) },
+      where: {
+        projectId: numericProjectId,
+        project: {
+          ownerUserId: authedUser.userId,
+        },
+      },
       include: {
         author: true,
         assignee: true,
@@ -59,7 +58,7 @@ export const getTasks = async (req: Request, res: Response): Promise<void> => {
 
 export const getMyTasks = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await getOrCreateAuthedUser(req);
+    const user = await getAuthedUser(req);
 
     const tasks = await prisma.task.findMany({
       where: {
@@ -91,7 +90,7 @@ export const getMyTasks = async (req: Request, res: Response): Promise<void> => 
 
 export const createTask = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await getOrCreateAuthedUser(req);
+    const user = await getAuthedUser(req);
 
     const {
       title,
@@ -111,6 +110,25 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
+    const numericProjectId = Number(projectId);
+
+    if (!Number.isFinite(numericProjectId) || numericProjectId <= 0) {
+      res.status(400).json({ message: "Invalid projectId" });
+      return;
+    }
+
+    const project = await prisma.project.findFirst({
+      where: {
+        id: numericProjectId,
+        ownerUserId: user.userId,
+      },
+    });
+
+    if (!project) {
+      res.status(404).json({ message: "Project not found" });
+      return;
+    }
+
     const newTask = await prisma.task.create({
       data: {
         title,
@@ -121,7 +139,7 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
         startDate: startDate ? new Date(startDate) : null,
         dueDate: dueDate ? new Date(dueDate) : null,
         points: typeof points === "number" ? points : points ? Number(points) : null,
-        projectId: Number(projectId),
+        projectId: numericProjectId,
         authorUserId: user.userId,
         assignedUserId: assignedUserId ? Number(assignedUserId) : null,
       },
@@ -145,8 +163,31 @@ export const updateTaskStatus = async (req: Request, res: Response): Promise<voi
   const { status } = req.body;
 
   try {
+    const user = await getAuthedUser(req);
+
+    const numericTaskId = Number(taskId);
+
+    if (!Number.isFinite(numericTaskId) || numericTaskId <= 0) {
+      res.status(400).json({ message: "Invalid taskId" });
+      return;
+    }
+
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        id: numericTaskId,
+        project: {
+          ownerUserId: user.userId,
+        },
+      },
+    });
+
+    if (!existingTask) {
+      res.status(404).json({ message: "Task not found" });
+      return;
+    }
+
     const updatedTask = await prisma.task.update({
-      where: { id: Number(taskId) },
+      where: { id: numericTaskId },
       data: { status },
       include: {
         author: true,
@@ -167,11 +208,22 @@ export const getUserTasks = async (req: Request, res: Response): Promise<void> =
   const { userId } = req.params;
 
   try {
+    const authedUser = await getAuthedUser(req);
+    const numericUserId = Number(userId);
+
+    if (!Number.isFinite(numericUserId) || numericUserId <= 0) {
+      res.status(400).json({ message: "Invalid userId" });
+      return;
+    }
+
     const tasks = await prisma.task.findMany({
       where: {
+        project: {
+          ownerUserId: authedUser.userId,
+        },
         OR: [
-          { authorUserId: Number(userId) },
-          { assignedUserId: Number(userId) },
+          { authorUserId: numericUserId },
+          { assignedUserId: numericUserId },
         ],
       },
       include: {

@@ -17,17 +17,14 @@ const Project = ({ params }: Props) => {
   const [activeTab, setActiveTab] = useState("Board");
   const [isModalNewTaskOpen, setIsModalNewTaskOpen] = useState(false);
 
-  // ✅ Parse route param once
   const projectId = useMemo(() => Number(params.id), [params.id]);
-
-  // ✅ Guard invalid ids early
   const isValidId = Number.isFinite(projectId) && projectId > 0;
 
-  // ✅ Fetch project list and derive name (no extra endpoint needed)
-  const { data: projects, isLoading: projectsLoading } = useGetProjectsQuery(
-    undefined,
-    { skip: !isValidId }
-  );
+  const {
+    data: projects,
+    isLoading: projectsLoading,
+    isError: projectsError,
+  } = useGetProjectsQuery(undefined, { skip: !isValidId });
 
   const project = useMemo(() => {
     if (!projects) return undefined;
@@ -45,22 +42,39 @@ const Project = ({ params }: Props) => {
     );
   }
 
+  if (projectsLoading) {
+    return (
+      <main className="p-6">
+        <h1 className="text-lg font-semibold">Loading project…</h1>
+      </main>
+    );
+  }
+
+  if (projectsError || !project) {
+    return (
+      <main className="p-6">
+        <h1 className="text-lg font-semibold">Project not found</h1>
+        <p className="mt-2 text-sm text-gray-600">
+          You do not have access to this project, or it does not exist.
+        </p>
+      </main>
+    );
+  }
+
   return (
     <div>
       <ModalNewTask
         isOpen={isModalNewTaskOpen}
         onClose={() => setIsModalNewTaskOpen(false)}
-        // ⬇️ keep passing string if your ModalNewTask expects string
-        // but it’s better long-term to change ModalNewTask to accept number
         id={String(projectId)}
       />
 
-<ProjectHeader
-  activeTab={activeTab}
-  setActiveTab={setActiveTab}
-  title={projectsLoading ? "Loading…" : project?.name ?? `Project #${projectId}`}
-  onNewTask={() => setIsModalNewTaskOpen(true)}
-/>
+      <ProjectHeader
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        title={project.name}
+        onNewTask={() => setIsModalNewTaskOpen(true)}
+      />
 
       {activeTab === "Board" && (
         <Board id={String(projectId)} setIsModalNewTaskOpen={setIsModalNewTaskOpen} />

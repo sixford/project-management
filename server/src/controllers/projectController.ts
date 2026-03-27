@@ -1,58 +1,60 @@
-// server/src/controllers/projectController.ts
-import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { Request, Response } from "express";
+import { getAuthedUser } from "../utils/getAuthedUser";
 
 const prisma = new PrismaClient();
 
-async function getOrCreateAuthedUser(req: Request) {
-  const sub = req.auth?.sub;
-  if (!sub) throw new Error("Missing req.auth.sub (did you forget verifyCognito middleware?)");
-
-  const payload = req.auth?.payload ?? {};
-
-  // Try to derive something stable for username/email
-  const email: string | undefined = payload.email;
-  const usernameFromToken: string | undefined =
-    payload["cognito:username"] ?? payload.username ?? (email ? email.split("@")[0] : undefined);
-
-  const username = usernameFromToken ?? `user_${sub.slice(0, 8)}`;
-
-  // Upsert so first login creates the user record
-  const user = await prisma.user.upsert({
-    where: { cognitoId: sub },
-    update: {},
-    create: {
-      cognitoId: sub,
-      username,
-      // NOTE: your schema doesn't include email currently; if you add it later, store it here.
-    },
-  });
-
-  return user;
-}
-
 export const getProjects = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await getOrCreateAuthedUser(req);
+    const authedUser = await getAuthedUser(req);
 
     const projects = await prisma.project.findMany({
-      where: { ownerUserId: user.userId },
-      orderBy: { id: "asc" },
+      where: {
+        ownerUserId: authedUser.userId,
+      },
+      orderBy: {
+        id: "desc",
+      },
     });
 
     res.json(projects);
   } catch (error: any) {
+    console.error("Get projects error:", error);
     res.status(500).json({ message: `Error retrieving projects: ${error.message}` });
+  }
+};
+
+export const getProjectById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authedUser = await getAuthedUser(req);
+    const { id } = req.params;
+
+    const project = await prisma.project.findFirst({
+      where: {
+        id: Number(id),
+        ownerUserId: authedUser.userId,
+      },
+    });
+
+    if (!project) {
+      res.status(404).json({ message: "Project not found" });
+      return;
+    }
+
+    res.json(project);
+  } catch (error: any) {
+    console.error("Get project by id error:", error);
+    res.status(500).json({ message: `Error retrieving project: ${error.message}` });
   }
 };
 
 export const createProject = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await getOrCreateAuthedUser(req);
+    const authedUser = await getAuthedUser(req);
 
     const { name, description, startDate, endDate } = req.body;
 
-    if (!name || typeof name !== "string") {
+    if (!name) {
       res.status(400).json({ message: "Project name is required" });
       return;
     }
@@ -61,14 +63,15 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
       data: {
         name,
         description,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        ownerUserId: user.userId,
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
+        ownerUserId: authedUser.userId,
       },
     });
 
     res.status(201).json(newProject);
   } catch (error: any) {
-    res.status(500).json({ message: `Error creating a project: ${error.message}` });
+    console.error("Create project error:", error);
+    res.status(500).json({ message: `Error creating project: ${error.message}` });
   }
 };
