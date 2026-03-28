@@ -122,7 +122,7 @@ const HomePage = () => {
       />
 
       <Header
-        name="Project Management Dashboard"
+        name="Dashboard"
         buttonComponent={
           <button
             className="flex items-center rounded-md bg-blue-primary px-3 py-2 text-white hover:bg-blue-600"
