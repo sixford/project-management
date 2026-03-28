@@ -25,7 +25,16 @@ export const getTasks = async (req: Request, res: Response): Promise<void> => {
     const project = await prisma.project.findFirst({
       where: {
         id: numericProjectId,
-        ownerUserId: authedUser.userId,
+        OR: [
+          { ownerUserId: authedUser.userId },
+          {
+            members: {
+              some: {
+                userId: authedUser.userId,
+              },
+            },
+          },
+        ],
       },
     });
 
@@ -38,7 +47,16 @@ export const getTasks = async (req: Request, res: Response): Promise<void> => {
       where: {
         projectId: numericProjectId,
         project: {
-          ownerUserId: authedUser.userId,
+          OR: [
+            { ownerUserId: authedUser.userId },
+            {
+              members: {
+                some: {
+                  userId: authedUser.userId,
+                },
+              },
+            },
+          ],
         },
       },
       include: {
@@ -67,7 +85,16 @@ export const getMyTasks = async (req: Request, res: Response): Promise<void> => 
           { assignedUserId: user.userId },
           {
             project: {
-              ownerUserId: user.userId,
+              OR: [
+                { ownerUserId: user.userId },
+                {
+                  members: {
+                    some: {
+                      userId: user.userId,
+                    },
+                  },
+                },
+              ],
             },
           },
         ],
@@ -120,7 +147,16 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
     const project = await prisma.project.findFirst({
       where: {
         id: numericProjectId,
-        ownerUserId: user.userId,
+        OR: [
+          { ownerUserId: user.userId },
+          {
+            members: {
+              some: {
+                userId: user.userId,
+              },
+            },
+          },
+        ],
       },
     });
 
@@ -176,7 +212,16 @@ export const updateTaskStatus = async (req: Request, res: Response): Promise<voi
       where: {
         id: numericTaskId,
         project: {
-          ownerUserId: user.userId,
+          OR: [
+            { ownerUserId: user.userId },
+            {
+              members: {
+                some: {
+                  userId: user.userId,
+                },
+              },
+            },
+          ],
         },
       },
     });
@@ -219,7 +264,16 @@ export const getUserTasks = async (req: Request, res: Response): Promise<void> =
     const tasks = await prisma.task.findMany({
       where: {
         project: {
-          ownerUserId: authedUser.userId,
+          OR: [
+            { ownerUserId: authedUser.userId },
+            {
+              members: {
+                some: {
+                  userId: authedUser.userId,
+                },
+              },
+            },
+          ],
         },
         OR: [
           { authorUserId: numericUserId },

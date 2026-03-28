@@ -10,7 +10,16 @@ export const getProjects = async (req: Request, res: Response): Promise<void> =>
 
     const projects = await prisma.project.findMany({
       where: {
-        ownerUserId: authedUser.userId,
+        OR: [
+          { ownerUserId: authedUser.userId },
+          {
+            members: {
+              some: {
+                userId: authedUser.userId,
+              },
+            },
+          },
+        ],
       },
       orderBy: {
         id: "desc",
@@ -29,10 +38,26 @@ export const getProjectById = async (req: Request, res: Response): Promise<void>
     const authedUser = await getAuthedUser(req);
     const { id } = req.params;
 
+    const numericId = Number(id);
+
+    if (!Number.isFinite(numericId) || numericId <= 0) {
+      res.status(400).json({ message: "Invalid project id" });
+      return;
+    }
+
     const project = await prisma.project.findFirst({
       where: {
-        id: Number(id),
-        ownerUserId: authedUser.userId,
+        id: numericId,
+        OR: [
+          { ownerUserId: authedUser.userId },
+          {
+            members: {
+              some: {
+                userId: authedUser.userId,
+              },
+            },
+          },
+        ],
       },
     });
 
@@ -59,14 +84,26 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const newProject = await prisma.project.create({
-      data: {
-        name,
-        description,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        ownerUserId: authedUser.userId,
-      },
+    const newProject = await prisma.$transaction(async (tx) => {
+      const project = await tx.project.create({
+        data: {
+          name,
+          description,
+          startDate: startDate ? new Date(startDate) : null,
+          endDate: endDate ? new Date(endDate) : null,
+          ownerUserId: authedUser.userId,
+        },
+      });
+
+      await tx.projectMember.create({
+        data: {
+          projectId: project.id,
+          userId: authedUser.userId,
+          role: "owner",
+        },
+      });
+
+      return project;
     });
 
     res.status(201).json(newProject);
