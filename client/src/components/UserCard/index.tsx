@@ -1,73 +1,40 @@
 "use client";
-import { useGetUsersQuery } from "@/state/api";
+
 import React from "react";
-import { useAppSelector } from "@/app/redux";
-import Header from "@/components/Header";
-import {
-  DataGrid,
-  GridColDef,
-  GridToolbarContainer,
-  GridToolbarExport,
-  GridToolbarFilterButton,
-} from "@mui/x-data-grid";
 import Image from "next/image";
-import { dataGridClassNames, dataGridSxStyles } from "@/lib/utils";
+import { User } from "@/state/api";
 
-const CustomToolbar = () => (
-  <GridToolbarContainer className="toolbar flex gap-2">
-    <GridToolbarFilterButton />
-    <GridToolbarExport />
-  </GridToolbarContainer>
-);
+type Props = {
+  user: User;
+};
 
-const columns: GridColDef[] = [
-  { field: "userId", headerName: "ID", width: 100 },
-  { field: "username", headerName: "Username", width: 150 },
-  {
-    field: "profilePictureUrl",
-    headerName: "Profile Picture",
-    width: 100,
-    renderCell: (params) => (
-      <div className="flex h-full w-full items-center justify-center">
-        <div className="h-9 w-9">
-          <Image
-            src={`https://pm-s3-images.s3.us-east-2.amazonaws.com/${params.value}`}
-            alt={params.row.username}
-            width={100}
-            height={50}
-            className="h-full rounded-full object-cover"
-          />
-        </div>
-      </div>
-    ),
-  },
-];
-
-const Users = () => {
-  const { data: users, isLoading, isError } = useGetUsersQuery();
-  const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
-
-  if (isLoading) return <div>Loading...</div>;
-  if (isError || !users) return <div>Error fetching users</div>;
-
+const UserCard = ({ user }: Props) => {
   return (
-    <div className="flex w-full flex-col p-8">
-      <Header name="Users" />
-      <div style={{ height: 650, width: "100%" }}>
-        <DataGrid
-          rows={users || []}
-          columns={columns}
-          getRowId={(row) => row.userId}
-          pagination
-          slots={{
-            toolbar: CustomToolbar,
-          }}
-          className={dataGridClassNames}
-          sx={dataGridSxStyles(isDarkMode)}
-        />
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-4">
+        <div className="h-12 w-12 overflow-hidden rounded-full bg-gray-100">
+          {user.profilePictureUrl ? (
+            <Image
+              src={`https://pm-s3-images.s3.us-east-2.amazonaws.com/${user.profilePictureUrl}`}
+              alt={user.username}
+              width={48}
+              height={48}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-gray-500">
+              {user.username?.charAt(0).toUpperCase() || "U"}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">{user.username}</h3>
+          <p className="text-sm text-gray-500">User ID: {user.userId}</p>
+        </div>
       </div>
     </div>
   );
 };
 
-export default Users;
+export default UserCard;
