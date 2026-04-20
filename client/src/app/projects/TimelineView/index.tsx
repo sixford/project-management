@@ -13,6 +13,7 @@ type TaskTypeItems = "task" | "milestone" | "project";
 
 const Timeline = ({ id, setIsModalNewTaskOpen }: Props) => {
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+
   const {
     data: tasks,
     error,
@@ -25,18 +26,23 @@ const Timeline = ({ id, setIsModalNewTaskOpen }: Props) => {
   });
 
   const ganttTasks = useMemo(() => {
-    return (
-      tasks?.map((task) => ({
-        start: new Date(task.startDate as string),
-        end: new Date(task.dueDate as string),
+    if (!tasks || tasks.length === 0) return [];
+
+    return tasks
+      .filter((task) => task.startDate && task.dueDate)
+      .map((task) => ({
+        start: new Date(task.startDate!),
+        end: new Date(task.dueDate!),
         name: task.title,
         id: `Task-${task.id}`,
         type: "task" as TaskTypeItems,
         progress: task.points ? (task.points / 10) * 100 : 0,
         isDisabled: false,
-      })) || []
-    );
+      }));
   }, [tasks]);
+
+  const tasksMissingDates =
+    tasks?.some((task) => !task.startDate || !task.dueDate) ?? false;
 
   const handleViewModeChange = (
     event: React.ChangeEvent<HTMLSelectElement>,
@@ -56,6 +62,7 @@ const Timeline = ({ id, setIsModalNewTaskOpen }: Props) => {
         <h1 className="me-2 text-lg font-bold dark:text-white">
           Project Tasks Timeline
         </h1>
+
         <div className="relative inline-block w-64">
           <select
             className="focus:shadow-outline block w-full appearance-none rounded border border-gray-400 bg-white px-4 py-2 pr-8 leading-tight shadow hover:border-gray-500 focus:outline-none dark:border-dark-secondary dark:bg-dark-secondary dark:text-white"
@@ -70,16 +77,33 @@ const Timeline = ({ id, setIsModalNewTaskOpen }: Props) => {
       </div>
 
       <div className="overflow-hidden rounded-md bg-white shadow dark:bg-dark-secondary dark:text-white">
-        <div className="timeline">
-          <Gantt
-            tasks={ganttTasks}
-            {...displayOptions}
-            columnWidth={displayOptions.viewMode === ViewMode.Month ? 150 : 100}
-            listCellWidth="100px"
-            barBackgroundColor={isDarkMode ? "#101214" : "#aeb8c2"}
-            barBackgroundSelectedColor={isDarkMode ? "#000" : "#9ba1a6"}
-          />
+        <div className="timeline p-4">
+          {tasks.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-300">
+              No tasks yet for this project.
+            </p>
+          ) : ganttTasks.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-300">
+              No tasks with both a start date and due date are available for the timeline yet.
+            </p>
+          ) : (
+            <Gantt
+              tasks={ganttTasks}
+              {...displayOptions}
+              columnWidth={displayOptions.viewMode === ViewMode.Month ? 150 : 100}
+              listCellWidth="100px"
+              barBackgroundColor={isDarkMode ? "#101214" : "#aeb8c2"}
+              barBackgroundSelectedColor={isDarkMode ? "#000" : "#9ba1a6"}
+            />
+          )}
         </div>
+
+        {tasksMissingDates && tasks.length > 0 && (
+          <div className="px-4 pb-2 text-sm text-amber-600 dark:text-amber-400">
+            Some tasks are hidden from the timeline because they are missing a start date or due date.
+          </div>
+        )}
+
         <div className="px-4 pb-5 pt-1">
           <button
             className="flex items-center rounded bg-blue-primary px-3 py-2 text-white hover:bg-blue-600"
